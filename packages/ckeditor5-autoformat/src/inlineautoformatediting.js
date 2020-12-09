@@ -147,7 +147,15 @@ export default function inlineAutoformatEditing( editor, plugin, testRegexpOrCal
 
 		const focus = selection.focus;
 		const block = focus.parent;
-		const { text, range } = getTextAfterCode( model.createRange( model.createPositionAt( block, 0 ), focus ), model );
+
+		// Grab the insides of the current block.
+		const { text, range } = getTextAfterCode(
+			model.createRange(
+				model.createPositionAt( block, 0 ),
+				model.createPositionAt( block, block.maxOffset )
+			),
+			model
+		);
 		const testOutput = testCallback( text );
 		const rangesToFormat = testOutputToRanges( range.start, testOutput.format, model );
 		const rangesToRemove = testOutputToRanges( range.start, testOutput.remove, model );

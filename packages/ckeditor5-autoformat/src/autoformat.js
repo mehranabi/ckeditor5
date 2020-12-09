@@ -60,6 +60,64 @@ export default class Autoformat extends Plugin {
 	}
 
 	/**
+	 * @param {RegExp} regExp The regular expression matching text to format.
+	 * Contrary to default behavior, this regular expression must provide *four* groups.
+	 * First group should hold a separator that limits the scope of when the autoformatting is applied.
+	 *
+	 * @private
+	 */
+	_matchAutoformatWithSeparators( regExp ) {
+		return text => {
+			let result;
+			const remove = [];
+			const format = [];
+
+			while ( ( result = regExp.exec( text ) ) !== null ) {
+				// There should be full match and 4 capture groups.
+				//   * Left separator group (whitespace or punctuation),
+				//   * Left delimiter group (`_` or `*` - single or double).
+				//   * A content to format.
+				//   * Right delimiter group.
+				if ( result && result.length < 5 ) {
+					break;
+				}
+
+				let {
+					index,
+					'1': leftSep,
+					'2': leftDel,
+					'3': content,
+					'4': rightDel
+				} = result;
+
+				// Separator should *not* count for the removal or formatting.
+				// We are offsetting the index by separator length.
+				index += leftSep.length;
+
+				// Start and End offsets of delimiters to remove.
+				const delStart = [
+					index,
+					index + leftDel.length
+				];
+				const delEnd = [
+					index + leftDel.length + content.length,
+					index + leftDel.length + content.length + rightDel.length
+				];
+
+				remove.push( delStart );
+				remove.push( delEnd );
+
+				format.push( [ index + leftDel.length, index + leftDel.length + content.length ] );
+			}
+
+			return {
+				remove,
+				format
+			};
+		};
+	}
+
+	/**
 	 * Adds autoformatting related to the {@link module:basic-styles/bold~Bold},
 	 * {@link module:basic-styles/italic~Italic}, {@link module:basic-styles/code~Code}
 	 * and {@link module:basic-styles/strikethrough~Strikethrough}
@@ -79,18 +137,37 @@ export default class Autoformat extends Plugin {
 
 		if ( commands.get( 'bold' ) ) {
 			const boldCallback = getCallbackFunctionForInlineAutoformat( this.editor, 'bold' );
-
-			inlineAutoformatEditing( this.editor, this, /(\*\*)([^*]+)(\*\*)$/g, boldCallback );
-			inlineAutoformatEditing( this.editor, this, /(__)([^_]+)(__)$/g, boldCallback );
+			inlineAutoformatEditing(
+				this.editor,
+				this,
+				this._matchAutoformatWithSeparators( /(\s)(\*\*)([^*]+)(\*\*)(?:\s)/g ),
+				boldCallback
+			);
+			inlineAutoformatEditing(
+				this.editor,
+				this,
+				this._matchAutoformatWithSeparators( /(\s)(__)([^_]+)(__)(?:\s)/g ),
+				boldCallback
+			);
 		}
 
 		if ( commands.get( 'italic' ) ) {
 			const italicCallback = getCallbackFunctionForInlineAutoformat( this.editor, 'italic' );
 
-			// The italic autoformatter cannot be triggered by the bold markers, so we need to check the
-			// text before the pattern (e.g. `(?:^|[^\*])`).
-			inlineAutoformatEditing( this.editor, this, /(?:^|[^*])(\*)([^*_]+)(\*)$/g, italicCallback );
-			inlineAutoformatEditing( this.editor, this, /(?:^|[^_])(_)([^_]+)(_)$/g, italicCallback );
+			// The italic autoformatter cannot be triggered by the bold markers,
+			// so we need to make sure there is a separator before the delimiter.
+			inlineAutoformatEditing(
+				this.editor,
+				this,
+				this._matchAutoformatWithSeparators( /(^|\s)(\*)([^*_]+)(\*)(?:\s)/g ),
+				italicCallback
+			);
+			inlineAutoformatEditing(
+				this.editor,
+				this,
+				this._matchAutoformatWithSeparators( /(^|\s)(_)([^_]+)(_)(?:\s)/g ),
+				italicCallback
+			);
 		}
 
 		if ( commands.get( 'code' ) ) {
